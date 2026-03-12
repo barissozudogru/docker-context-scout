@@ -23,9 +23,11 @@ Arguments:
   path          Directory to analyze (default: current directory)
 
 Options:
-  --fix         Append suggested rules to .dockerignore
-  --json        Output results as JSON (for CI pipelines)
-  --help, -h    Show this help message
+  --fix               Append suggested rules to .dockerignore
+  --json              Output results as JSON (for CI pipelines)
+  --threshold <MB>    Only show files/dirs above this size in MB
+  --version, -v       Show version number
+  --help, -h          Show this help message
 ```
 
 ### Analyze current directory

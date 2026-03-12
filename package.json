@@ -1,6 +1,6 @@
 {
   "name": "@barissozudogru/docker-context-scout",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Analyze Docker build context and optimize .dockerignore",
   "type": "module",
   "bin": {

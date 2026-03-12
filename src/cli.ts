@@ -2,10 +2,12 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import { analyze } from './index.js';
 import type { AnalysisResult } from './types.js';
 
-const VERSION = '0.1.0';
+const require = createRequire(import.meta.url);
+const VERSION: string = (require('../package.json') as { version: string }).version;
 
 // TTY-aware color helpers — only emit escape codes when stdout is a real terminal
 const isTTY = process.stdout.isTTY === true;
