@@ -1,0 +1,40 @@
+{
+  "name": "@barissozudogru/docker-context-scout",
+  "version": "0.1.0",
+  "description": "Analyze Docker build context and optimize .dockerignore",
+  "type": "module",
+  "bin": {
+    "docker-context-scout": "./dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/barissozudogru/docker-context-scout.git"
+  },
+  "keywords": [
+    "docker",
+    "dockerignore",
+    "build-context",
+    "optimization",
+    "cli"
+  ],
+  "author": "Baris Sozudogru",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.9.3"
+  }
+}
