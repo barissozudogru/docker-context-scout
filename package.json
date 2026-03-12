@@ -1,6 +1,6 @@
 {
   "name": "@barissozudogru/docker-context-scout",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Analyze Docker build context and optimize .dockerignore",
   "type": "module",
   "bin": {
@@ -33,6 +33,9 @@
   ],
   "author": "Baris Sozudogru",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "typescript": "^5.9.3"

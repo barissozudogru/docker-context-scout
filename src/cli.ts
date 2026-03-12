@@ -5,6 +5,20 @@ import * as path from 'node:path';
 import { analyze } from './index.js';
 import type { AnalysisResult } from './types.js';
 
+const VERSION = '0.1.0';
+
+// TTY-aware color helpers — only emit escape codes when stdout is a real terminal
+const isTTY = process.stdout.isTTY === true;
+
+const c = {
+  bold: (s: string) => (isTTY ? `\x1b[1m${s}\x1b[0m` : s),
+  dim: (s: string) => (isTTY ? `\x1b[2m${s}\x1b[0m` : s),
+  cyan: (s: string) => (isTTY ? `\x1b[36m${s}\x1b[0m` : s),
+  yellow: (s: string) => (isTTY ? `\x1b[33m${s}\x1b[0m` : s),
+  green: (s: string) => (isTTY ? `\x1b[32m${s}\x1b[0m` : s),
+  red: (s: string) => (isTTY ? `\x1b[31m${s}\x1b[0m` : s),
+};
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) {
     return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -20,36 +34,43 @@ function formatBytes(bytes: number): string {
 
 function printHelp(): void {
   console.log(`
-docker-context-scout v0.1.0
+${c.bold('docker-context-scout')} v${VERSION}
 
 Analyze Docker build context size and suggest .dockerignore rules.
 
-Usage:
+${c.bold('Usage:')}
   docker-context-scout [path] [options]
 
-Arguments:
-  path          Directory to analyze (default: current directory)
+${c.bold('Arguments:')}
+  path                    Directory to analyze (default: current directory)
 
-Options:
-  --fix         Append suggested rules to .dockerignore
-  --json        Output results as JSON (for CI pipelines)
-  --help, -h    Show this help message
+${c.bold('Options:')}
+  --fix                   Append suggested rules to .dockerignore
+  --json                  Output results as JSON (for CI pipelines)
+  --threshold <MB>        Only show files/dirs above this size in MB
+  --version, -v           Show version number
+  --help, -h              Show this help message
 
-Examples:
+${c.bold('Examples:')}
   docker-context-scout
   docker-context-scout ./my-app --fix
   docker-context-scout /path/to/project --json
+  docker-context-scout . --threshold 10
 `);
 }
 
-function printPretty(result: AnalysisResult): void {
-  const hr = '-'.repeat(60);
+function printPretty(result: AnalysisResult, thresholdBytes: number): void {
+  const hr = c.dim('-'.repeat(60));
 
   console.log('');
-  console.log('  Docker Context Scout');
+  console.log(c.bold('  Docker Context Scout'));
   console.log(hr);
-  console.log(`  Path:        ${result.analyzedPath}`);
-  console.log(`  Total size:  ${formatBytes(result.totalSizeBytes)} (${result.fileCount} files)`);
+  console.log(`  Path:        ${c.cyan(result.analyzedPath)}`);
+  console.log(`  Total size:  ${c.yellow(formatBytes(result.totalSizeBytes))} (${result.fileCount} files)`);
+
+  if (!result.dockerfileFound) {
+    console.log(`  ${c.yellow('Note: No Dockerfile found in the analyzed directory.')}`);
+  }
 
   if (result.existingDockerignoreRules.length > 0) {
     console.log(`  .dockerignore: ${result.existingDockerignoreRules.length} existing rules`);
@@ -58,40 +79,50 @@ function printPretty(result: AnalysisResult): void {
   }
 
   console.log('');
-  console.log('  Top 10 items by size:');
+  console.log(c.bold('  Top items by size:'));
   console.log(hr);
 
-  const top10 = result.topOffenders.slice(0, 10);
-  for (const entry of top10) {
-    const type = entry.isDirectory ? 'dir ' : 'file';
-    const label = `  [${type}]  ${entry.path}`;
-    const size = formatBytes(entry.size).padStart(10);
-    console.log(`${label.padEnd(50)} ${size}`);
+  const filtered =
+    thresholdBytes > 0
+      ? result.topOffenders.filter((e) => e.size >= thresholdBytes)
+      : result.topOffenders.slice(0, 10);
+
+  if (filtered.length === 0) {
+    console.log(c.dim(`  No items above ${formatBytes(thresholdBytes)}.`));
+  } else {
+    for (const entry of filtered) {
+      const type = entry.isDirectory ? 'dir ' : 'file';
+      const label = `  [${type}]  ${entry.path}`;
+      const size = formatBytes(entry.size).padStart(10);
+      console.log(`${label.padEnd(50)} ${c.yellow(size)}`);
+    }
   }
 
   if (result.suggestedRules.length > 0) {
     console.log('');
-    console.log('  Suggested .dockerignore rules:');
+    console.log(c.bold('  Suggested .dockerignore rules:'));
     console.log(hr);
 
     for (const rule of result.suggestedRules) {
       const savings = formatBytes(rule.estimatedSavingsBytes);
-      console.log(`  ${rule.pattern.padEnd(25)}  saves ~${savings.padStart(10)}  ${rule.reason}`);
+      console.log(
+        `  ${c.green(rule.pattern.padEnd(25))}  saves ~${c.yellow(savings.padStart(10))}  ${c.dim(rule.reason)}`
+      );
     }
 
     console.log('');
     console.log(hr);
     console.log(
-      `  Estimated context after optimization: ${formatBytes(result.estimatedReducedSizeBytes)}`
+      `  Estimated context after optimization: ${c.green(formatBytes(result.estimatedReducedSizeBytes))}`
     );
     console.log(
-      `  Potential reduction: ${result.reductionPercentage}% (${formatBytes(
+      `  Potential reduction: ${c.green(String(result.reductionPercentage) + '%')} (${formatBytes(
         result.totalSizeBytes - result.estimatedReducedSizeBytes
       )})`
     );
   } else {
     console.log('');
-    console.log('  No additional optimizations found. Your .dockerignore looks good.');
+    console.log(c.green('  No additional optimizations found. Your .dockerignore looks good.'));
   }
 
   console.log('');
@@ -118,6 +149,22 @@ function applyFix(targetPath: string, result: AnalysisResult): void {
   }
 }
 
+function parseThreshold(args: string[]): number {
+  const idx = args.indexOf('--threshold');
+  if (idx === -1) return 0;
+  const raw = args[idx + 1];
+  if (!raw || raw.startsWith('--')) {
+    console.error('Error: --threshold requires a numeric value in MB (e.g. --threshold 10)');
+    process.exit(1);
+  }
+  const mb = parseFloat(raw);
+  if (isNaN(mb) || mb < 0) {
+    console.error(`Error: invalid threshold value "${raw}". Must be a non-negative number.`);
+    process.exit(1);
+  }
+  return mb * 1024 * 1024;
+}
+
 function main(): void {
   const args = process.argv.slice(2);
 
@@ -126,10 +173,20 @@ function main(): void {
     process.exit(0);
   }
 
+  if (args.includes('--version') || args.includes('-v')) {
+    console.log(VERSION);
+    process.exit(0);
+  }
+
   const jsonMode = args.includes('--json');
   const fixMode = args.includes('--fix');
+  const thresholdBytes = parseThreshold(args);
 
-  const positional = args.filter((a) => !a.startsWith('--') && a !== '-h');
+  const positional = args.filter(
+    (a, i) =>
+      !a.startsWith('-') &&
+      (i === 0 || args[i - 1] !== '--threshold')
+  );
   const targetPath = positional[0] ?? process.cwd();
 
   let result: AnalysisResult;
@@ -148,7 +205,7 @@ function main(): void {
   if (jsonMode) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    printPretty(result);
+    printPretty(result, thresholdBytes);
   }
 
   if (fixMode) {

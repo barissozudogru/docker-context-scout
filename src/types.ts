@@ -21,4 +21,5 @@ export interface AnalysisResult {
   estimatedReducedSizeMB: number;
   reductionPercentage: number;
   analyzedPath: string;
+  dockerfileFound: boolean;
 }

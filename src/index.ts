@@ -95,38 +95,103 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
   },
 ];
 
-function readDockerignore(dirPath: string): string[] {
+function readDockerignore(dirPath: string): { positive: string[]; negative: string[]; all: string[] } {
   const dockerignorePath = path.join(dirPath, '.dockerignore');
   if (!fs.existsSync(dockerignorePath)) {
-    return [];
+    return { positive: [], negative: [], all: [] };
   }
-  return fs
+  const lines = fs
     .readFileSync(dockerignorePath, 'utf-8')
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith('#'));
+
+  const positive = lines.filter((l) => !l.startsWith('!'));
+  const negative = lines.filter((l) => l.startsWith('!')).map((l) => l.slice(1));
+  return { positive, negative, all: lines };
 }
 
-function matchesDockerignore(relPath: string, rules: string[]): boolean {
-  for (const rule of rules) {
-    const normalized = rule.replace(/\\/g, '/').replace(/\/$/, '');
-    if (normalized === relPath) return true;
-    if (relPath.startsWith(normalized + '/')) return true;
-    const base = path.basename(relPath);
-    if (normalized.includes('*')) {
-      const escaped = normalized.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
-      if (new RegExp(`^${escaped}$`).test(base)) return true;
-      if (new RegExp(`^${escaped}$`).test(relPath)) return true;
+/**
+ * Convert a single .dockerignore glob rule into a RegExp.
+ * Docker's glob semantics:
+ *   - '*' matches any sequence of non-separator characters (not '/')
+ *   - '**' matches any sequence including separators
+ *   - '?' matches a single non-separator character
+ *   - A leading '/' anchors to the root; without it, the pattern matches anywhere in the path
+ */
+function dockerignoreGlobToRegex(rule: string): RegExp {
+  const normalized = rule.replace(/\\/g, '/').replace(/\/$/, '');
+
+  // Anchor: if the rule contains a slash (other than trailing), it is relative to root
+  const anchored = normalized.startsWith('/') || normalized.includes('/');
+  const stripped = normalized.startsWith('/') ? normalized.slice(1) : normalized;
+
+  let reStr = '';
+  let i = 0;
+  while (i < stripped.length) {
+    if (stripped[i] === '*' && stripped[i + 1] === '*') {
+      // '**' — match anything including slashes
+      reStr += '.*';
+      i += 2;
+      // consume surrounding slashes: /**/  or leading /**/
+      if (stripped[i] === '/') i++;
+    } else if (stripped[i] === '*') {
+      // '*' — match anything except '/'
+      reStr += '[^/]*';
+      i++;
+    } else if (stripped[i] === '?') {
+      reStr += '[^/]';
+      i++;
+    } else {
+      // Escape regex metacharacters
+      reStr += stripped[i].replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      i++;
     }
   }
-  return false;
+
+  if (anchored) {
+    // Pattern must match from the start of the relative path
+    return new RegExp(`^${reStr}(/.*)?$`);
+  } else {
+    // Pattern may match anywhere as a path segment
+    return new RegExp(`(^|/)${reStr}(/.*)?$`);
+  }
+}
+
+function matchesDockerignore(
+  relPath: string,
+  positive: string[],
+  negative: string[]
+): boolean {
+  let matched = false;
+
+  for (const rule of positive) {
+    const re = dockerignoreGlobToRegex(rule);
+    if (re.test(relPath)) {
+      matched = true;
+    }
+  }
+
+  if (matched) {
+    // A negation pattern re-includes the file
+    for (const rule of negative) {
+      const re = dockerignoreGlobToRegex(rule);
+      if (re.test(relPath)) {
+        matched = false;
+      }
+    }
+  }
+
+  return matched;
 }
 
 function walkDirectory(
   dirPath: string,
   rootPath: string,
-  existingRules: string[],
-  entries: FileEntry[]
+  positiveRules: string[],
+  negativeRules: string[],
+  entries: FileEntry[],
+  visitedInodes: Set<number>
 ): void {
   let items: fs.Dirent[];
   try {
@@ -139,20 +204,56 @@ function walkDirectory(
     const fullPath = path.join(dirPath, item.name);
     const relPath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
 
-    if (matchesDockerignore(relPath, existingRules)) {
+    if (matchesDockerignore(relPath, positiveRules, negativeRules)) {
       continue;
     }
 
-    if (item.isDirectory()) {
-      let size = 0;
+    if (item.isSymbolicLink()) {
+      let stat: fs.Stats;
       try {
-        size = getDirectorySize(fullPath);
+        stat = fs.statSync(fullPath);
       } catch {
-        size = 0;
+        continue;
       }
-      entries.push({ path: relPath, size, isDirectory: true });
-      walkDirectory(fullPath, rootPath, existingRules, entries);
-    } else if (item.isFile() || item.isSymbolicLink()) {
+
+      if (stat.isDirectory()) {
+        // Detect symlink loops via inode tracking
+        if (visitedInodes.has(stat.ino)) {
+          continue;
+        }
+        visitedInodes.add(stat.ino);
+        entries.push({ path: relPath, size: 0, isDirectory: true });
+        walkDirectory(fullPath, rootPath, positiveRules, negativeRules, entries, visitedInodes);
+        visitedInodes.delete(stat.ino);
+      } else {
+        entries.push({ path: relPath, size: stat.size, isDirectory: false });
+      }
+    } else if (item.isDirectory()) {
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        continue;
+      }
+      if (visitedInodes.has(stat.ino)) {
+        continue;
+      }
+      visitedInodes.add(stat.ino);
+      // Size will be computed from accumulated file entries after walk; store 0 for now
+      const entryIndex = entries.length;
+      entries.push({ path: relPath, size: 0, isDirectory: true });
+      walkDirectory(fullPath, rootPath, positiveRules, negativeRules, entries, visitedInodes);
+      visitedInodes.delete(stat.ino);
+
+      // Back-fill directory size from its child file entries
+      let dirSize = 0;
+      for (let j = entryIndex + 1; j < entries.length; j++) {
+        if (!entries[j].isDirectory) {
+          dirSize += entries[j].size;
+        }
+      }
+      entries[entryIndex].size = dirSize;
+    } else if (item.isFile()) {
       let size = 0;
       try {
         size = fs.statSync(fullPath).size;
@@ -162,29 +263,6 @@ function walkDirectory(
       entries.push({ path: relPath, size, isDirectory: false });
     }
   }
-}
-
-function getDirectorySize(dirPath: string): number {
-  let total = 0;
-  let items: fs.Dirent[];
-  try {
-    items = fs.readdirSync(dirPath, { withFileTypes: true });
-  } catch {
-    return 0;
-  }
-  for (const item of items) {
-    const fullPath = path.join(dirPath, item.name);
-    if (item.isDirectory()) {
-      total += getDirectorySize(fullPath);
-    } else if (item.isFile()) {
-      try {
-        total += fs.statSync(fullPath).size;
-      } catch {
-        // ignore unreadable files
-      }
-    }
-  }
-  return total;
 }
 
 function matchesExcludablePattern(relPath: string, matchers: RegExp[]): boolean {
@@ -198,10 +276,14 @@ export function analyze(targetPath: string): AnalysisResult {
     throw new Error(`Path does not exist: ${resolvedPath}`);
   }
 
-  const existingRules = readDockerignore(resolvedPath);
+  const { positive: positiveRules, negative: negativeRules, all: existingRules } = readDockerignore(resolvedPath);
   const entries: FileEntry[] = [];
 
-  walkDirectory(resolvedPath, resolvedPath, existingRules, entries);
+  // Seed visited inodes with the root directory to avoid traversing back to it via symlinks
+  const rootStat = fs.statSync(resolvedPath);
+  const visitedInodes = new Set<number>([rootStat.ino]);
+
+  walkDirectory(resolvedPath, resolvedPath, positiveRules, negativeRules, entries, visitedInodes);
 
   const totalSizeBytes = entries
     .filter((e) => !e.isDirectory)
@@ -264,6 +346,8 @@ export function analyze(targetPath: string): AnalysisResult {
         ) / 10
       : 0;
 
+  const dockerfileFound = fs.existsSync(path.join(resolvedPath, 'Dockerfile'));
+
   return {
     totalSizeBytes,
     totalSizeMB: Math.round((totalSizeBytes / 1024 / 1024) * 100) / 100,
@@ -275,6 +359,7 @@ export function analyze(targetPath: string): AnalysisResult {
     estimatedReducedSizeMB: Math.round((estimatedReducedSizeBytes / 1024 / 1024) * 100) / 100,
     reductionPercentage,
     analyzedPath: resolvedPath,
+    dockerfileFound,
   };
 }
 
