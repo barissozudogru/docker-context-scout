@@ -95,6 +95,14 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
   },
 ];
 
+function stripInlineComment(line: string): string {
+  // Docker only honours '#' at column 1 as a comment; a '#' mid-line is part of
+  // the pattern. For comparison we drop anything after the first inline '#',
+  // so a hand-annotated rule is still recognised as covering its pattern.
+  const hashIndex = line.indexOf('#');
+  return hashIndex > 0 ? line.slice(0, hashIndex).trim() : line;
+}
+
 function readDockerignore(dirPath: string): { positive: string[]; negative: string[]; all: string[] } {
   const dockerignorePath = path.join(dirPath, '.dockerignore');
   if (!fs.existsSync(dockerignorePath)) {
@@ -104,7 +112,9 @@ function readDockerignore(dirPath: string): { positive: string[]; negative: stri
     .readFileSync(dockerignorePath, 'utf-8')
     .split('\n')
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'));
+    .filter((l) => l && !l.startsWith('#'))
+    .map(stripInlineComment)
+    .filter((l) => l);
 
   const positive = lines.filter((l) => !l.startsWith('!'));
   const negative = lines.filter((l) => l.startsWith('!')).map((l) => l.slice(1));
