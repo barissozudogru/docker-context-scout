@@ -1,33 +1,6 @@
-<h1 align="center">docker-context-scout</h1>
+# docker-context-scout
 
-<p align="center">
-  Find out what Docker is sending as build context and cut it down to size.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Node.js-%3E%3D18-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js >= 18">
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat" alt="MIT License">
-  <img src="https://img.shields.io/badge/Zero_Dependencies-brightgreen?style=flat" alt="Zero Dependencies">
-</p>
-
----
-
-## What It Does
-
-Every time you run `docker build`, Docker compresses and streams your entire project directory to the build daemon before a single instruction executes. This is the **build context**. On a typical Node.js or Python project it is not uncommon to send 400 MB or more — mostly `node_modules`, `.git`, and build artifacts — even though your final image needs none of it.
-
-docker-context-scout walks your project, measures each entry, cross-references your existing `.dockerignore`, and tells you exactly what is bloating your build context and how to fix it. A single `--fix` flag writes the `.dockerignore` rules for you.
-
-**Why it matters:**
-
-- Slower builds — Docker re-uploads the full context on every `docker build`, even for layer-cache hits.
-- Secrets risk — `.env` files and Terraform state can be silently baked into image layers.
-- Larger images — accidentally copying `node_modules` or `dist` overwrites the optimized layer produced by your multi-stage build.
-
----
-
-## Quick Start
+Find out what Docker is sending as build context and cut it down to size.
 
 Run without installing:
 
@@ -35,13 +8,9 @@ Run without installing:
 npx @barissozudogru/docker-context-scout
 ```
 
-Or install globally:
+Every time you run `docker build`, Docker compresses and streams your entire project directory to the build daemon before a single instruction executes. On a typical Node.js or Python project it is not uncommon to send 400 MB or more of `node_modules`, `.git`, and build artifacts that your final image doesn't need. This slows down builds because Docker re-uploads the full context even for layer-cache hits, risks baking secrets like `.env` files or Terraform state into image layers, and creates unnecessarily large images.
 
-```bash
-npm install -g @barissozudogru/docker-context-scout
-```
-
----
+docker-context-scout walks your project, measures each entry, cross-references your existing `.dockerignore`, and tells you exactly what is bloating your build context and how to fix it. A single `--fix` flag writes the `.dockerignore` rules for you.
 
 ## Usage
 
