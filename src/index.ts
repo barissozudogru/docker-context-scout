@@ -232,9 +232,20 @@ function walkDirectory(
           continue;
         }
         visitedInodes.add(stat.ino);
+        
+        const entryIndex = entries.length;
         entries.push({ path: relPath, size: 0, isDirectory: true });
         walkDirectory(fullPath, rootPath, positiveRules, negativeRules, entries, visitedInodes);
         visitedInodes.delete(stat.ino);
+
+        // Back-fill directory size from its child file entries
+        let dirSize = 0;
+        for (let j = entryIndex + 1; j < entries.length; j++) {
+          if (!entries[j].isDirectory) {
+            dirSize += entries[j].size;
+          }
+        }
+        entries[entryIndex].size = dirSize;
       } else {
         entries.push({ path: relPath, size: stat.size, isDirectory: false });
       }
