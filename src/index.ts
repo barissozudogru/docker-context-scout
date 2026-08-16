@@ -103,10 +103,16 @@ function stripInlineComment(line: string): string {
   return hashIndex > 0 ? line.slice(0, hashIndex).trim() : line;
 }
 
-function readDockerignore(dirPath: string): { positive: string[]; negative: string[]; all: string[] } {
+interface CompiledRule {
+  original: string;
+  isNegative: boolean;
+  regex: RegExp;
+}
+
+function readDockerignore(dirPath: string): { rules: CompiledRule[]; all: string[] } {
   const dockerignorePath = path.join(dirPath, '.dockerignore');
   if (!fs.existsSync(dockerignorePath)) {
-    return { positive: [], negative: [], all: [] };
+    return { rules: [], all: [] };
   }
   const lines = fs
     .readFileSync(dockerignorePath, 'utf-8')
@@ -116,9 +122,17 @@ function readDockerignore(dirPath: string): { positive: string[]; negative: stri
     .map(stripInlineComment)
     .filter((l) => l);
 
-  const positive = lines.filter((l) => !l.startsWith('!'));
-  const negative = lines.filter((l) => l.startsWith('!')).map((l) => l.slice(1));
-  return { positive, negative, all: lines };
+  const rules: CompiledRule[] = lines.map((l) => {
+    const isNegative = l.startsWith('!');
+    const pattern = isNegative ? l.slice(1) : l;
+    return {
+      original: l,
+      isNegative,
+      regex: dockerignoreGlobToRegex(pattern)
+    };
+  });
+
+  return { rules, all: lines };
 }
 
 /**
@@ -170,25 +184,13 @@ function dockerignoreGlobToRegex(rule: string): RegExp {
 
 function matchesDockerignore(
   relPath: string,
-  positive: string[],
-  negative: string[]
+  rules: CompiledRule[]
 ): boolean {
   let matched = false;
 
-  for (const rule of positive) {
-    const re = dockerignoreGlobToRegex(rule);
-    if (re.test(relPath)) {
-      matched = true;
-    }
-  }
-
-  if (matched) {
-    // A negation pattern re-includes the file
-    for (const rule of negative) {
-      const re = dockerignoreGlobToRegex(rule);
-      if (re.test(relPath)) {
-        matched = false;
-      }
+  for (const rule of rules) {
+    if (rule.regex.test(relPath)) {
+      matched = !rule.isNegative;
     }
   }
 
@@ -198,8 +200,7 @@ function matchesDockerignore(
 function walkDirectory(
   dirPath: string,
   rootPath: string,
-  positiveRules: string[],
-  negativeRules: string[],
+  rules: CompiledRule[],
   entries: FileEntry[],
   visitedInodes: Set<number>
 ): void {
@@ -214,7 +215,7 @@ function walkDirectory(
     const fullPath = path.join(dirPath, item.name);
     const relPath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
 
-    if (matchesDockerignore(relPath, positiveRules, negativeRules)) {
+    if (matchesDockerignore(relPath, rules)) {
       continue;
     }
 
@@ -235,7 +236,7 @@ function walkDirectory(
         
         const entryIndex = entries.length;
         entries.push({ path: relPath, size: 0, isDirectory: true });
-        walkDirectory(fullPath, rootPath, positiveRules, negativeRules, entries, visitedInodes);
+        walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
         visitedInodes.delete(stat.ino);
 
         // Back-fill directory size from its child file entries
@@ -263,7 +264,7 @@ function walkDirectory(
       // Size will be computed from accumulated file entries after walk; store 0 for now
       const entryIndex = entries.length;
       entries.push({ path: relPath, size: 0, isDirectory: true });
-      walkDirectory(fullPath, rootPath, positiveRules, negativeRules, entries, visitedInodes);
+      walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
       visitedInodes.delete(stat.ino);
 
       // Back-fill directory size from its child file entries
@@ -297,14 +298,14 @@ export function analyze(targetPath: string): AnalysisResult {
     throw new Error(`Path does not exist: ${resolvedPath}`);
   }
 
-  const { positive: positiveRules, negative: negativeRules, all: existingRules } = readDockerignore(resolvedPath);
+  const { rules, all: existingRules } = readDockerignore(resolvedPath);
   const entries: FileEntry[] = [];
 
   // Seed visited inodes with the root directory to avoid traversing back to it via symlinks
   const rootStat = fs.statSync(resolvedPath);
   const visitedInodes = new Set<number>([rootStat.ino]);
 
-  walkDirectory(resolvedPath, resolvedPath, positiveRules, negativeRules, entries, visitedInodes);
+  walkDirectory(resolvedPath, resolvedPath, rules, entries, visitedInodes);
 
   const totalSizeBytes = entries
     .filter((e) => !e.isDirectory)
