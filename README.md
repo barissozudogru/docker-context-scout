@@ -46,7 +46,7 @@ docker-context-scout ./my-app
 docker-context-scout --fix
 ```
 
-### Filter noise  -  only show entries above 10 MB
+### Filter noise - only show entries above 10 MB
 
 ```bash
 docker-context-scout --threshold 10
@@ -62,8 +62,8 @@ docker-context-scout --threshold 10
 | `--fix` | Append suggested rules to `.dockerignore` (creates it if absent) | Off |
 | `--json` | Emit machine-readable JSON to stdout | Off |
 | `--threshold <MB>` | Hide entries smaller than this threshold | Show all |
-| `--version`, `-v` | Print version and exit |  -  |
-| `--help`, `-h` | Print usage and exit |  -  |
+| `--version`, `-v` | Print version and exit | - |
+| `--help`, `-h` | Print usage and exit | - |
 
 ---
 
@@ -126,7 +126,7 @@ After running `--fix`, a `.dockerignore` is created with all suggested rules.
 
 Use `--json` to gate builds on context size in any CI pipeline.
 
-### GitHub Actions  -  fail if context exceeds 50 MB
+### GitHub Actions - fail if context exceeds 50 MB
 
 ```yaml
 - name: Check Docker build context
@@ -175,10 +175,10 @@ docker-context-scout --json | jq '.reductionPercentage'
 | Code | Meaning |
 |---|---|
 | `0` | Analysis completed successfully |
-| `1` | Error  -  invalid path, unreadable directory, or bad argument |
+| `1` | Error - invalid path, unreadable directory, or bad argument |
 
 ---
 
 ## License
 
-[MIT](./LICENSE)  -  Baris Sozudogru
+[MIT](./LICENSE) - Baris Sozudogru
