@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and 
 
 ---
 
+## [0.4.0] - 2026-08-19
+
+### Fixed
+- Generated `.dockerignore` rules now use `**/` where the savings calculation counts nested matches, so applying the suggestions delivers the reported reduction.
+- Aggregate reduction no longer double-counts files matched by more than one rule.
+
+### Added
+- Rules for `.venv`, `venv`, `.tox`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `*.egg-info`, `target`, `vendor` and `.gradle`.
+- Test suite.
+
 ## [0.3.0] - 2026-01-15
 
 ### Fixed
