@@ -27,7 +27,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and 
 ### Added
 
 - `--threshold <MB>` option to suppress entries below a given size.
-- TTY-aware color output — ANSI escape codes are suppressed when stdout is not a terminal (pipes, CI logs).
+- TTY-aware color output  -  ANSI escape codes are suppressed when stdout is not a terminal (pipes, CI logs).
 - `dockerfileFound` field in JSON output.
 - Detection of `.terraform` and `*.tfstate*` patterns.
 
@@ -47,4 +47,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and 
 - Detection of 15 common excludable patterns (`.git`, `node_modules`, `__pycache__`, `.env*`, `*.md`, test directories, editor configs, `dist`, `build`, `coverage`, `.next`, `.nuxt`, `*.log`, OS metadata files).
 - `--fix` flag to write or append rules to `.dockerignore`.
 - `--json` flag for machine-readable output.
-- Zero runtime dependencies — ships as a single compiled JS file.
+- Zero runtime dependencies  -  ships as a single compiled JS file.
