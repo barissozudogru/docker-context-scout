@@ -240,13 +240,13 @@ function dockerignoreGlobToRegex(rule: string): RegExp {
   let i = 0;
   while (i < stripped.length) {
     if (stripped[i] === '*' && stripped[i + 1] === '*') {
-      // '**' — match anything including slashes
+      // '**' - match anything including slashes
       reStr += '.*';
       i += 2;
       // consume surrounding slashes: /**/  or leading /**/
       if (stripped[i] === '/') i++;
     } else if (stripped[i] === '*') {
-      // '*' — match anything except '/'
+      // '*' - match anything except '/'
       reStr += '[^/]*';
       i++;
     } else if (stripped[i] === '?') {

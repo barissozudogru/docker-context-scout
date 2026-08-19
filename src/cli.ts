@@ -9,7 +9,7 @@ import type { AnalysisResult } from './types.js';
 const require = createRequire(import.meta.url);
 const VERSION: string = (require('../package.json') as { version: string }).version;
 
-// TTY-aware color helpers — only emit escape codes when stdout is a real terminal
+// TTY-aware color helpers - only emit escape codes when stdout is a real terminal
 const isTTY = process.stdout.isTTY === true;
 
 const c = {
