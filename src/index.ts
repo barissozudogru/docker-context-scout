@@ -2,6 +2,19 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { FileEntry, AnalysisResult, PatternSuggestion } from './types.js';
 
+/**
+ * Rules used both to estimate savings and to generate .dockerignore lines.
+ *
+ * The two must agree. Docker matches a bare pattern against the context root
+ * only: `*.md` skips root markdown but keeps `docs/guide.md`, and `__pycache__`
+ * skips a root cache directory but keeps every nested one. Matching anywhere in
+ * the tree requires the `**\/` prefix.
+ *
+ * So a rule whose matchers are unanchored (they can hit any path segment) must
+ * emit a `**\/` pattern, and a rule whose matchers are anchored with `^` must
+ * not. `assertPatternsMatchMatchers` in the tests enforces exactly that, because
+ * hand-keeping these two fields in sync is what drifted in the first place.
+ */
 const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: string }> = [
   {
     pattern: '.git',
@@ -9,29 +22,84 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
     reason: 'Git metadata is never needed in Docker images',
   },
   {
-    pattern: 'node_modules',
+    pattern: '**/node_modules',
     matchers: [/node_modules(\/|$)/],
     reason: 'Dependencies are reinstalled during build via npm/yarn/pnpm install',
   },
   {
-    pattern: '__pycache__',
-    matchers: [/__pycache__(\/|$)/, /\.pyc$/],
+    pattern: '**/__pycache__',
+    matchers: [/__pycache__(\/|$)/],
     reason: 'Python bytecode cache is regenerated at runtime',
   },
   {
-    pattern: '.env*',
-    matchers: [/\.env(\.|$)/, /^\.env$/],
+    pattern: '**/*.pyc',
+    matchers: [/\.pyc$/],
+    reason: 'Compiled Python bytecode is regenerated at runtime',
+  },
+  {
+    pattern: '**/.venv',
+    matchers: [/(^|\/)\.venv(\/|$)/],
+    reason: 'Virtualenvs are platform-specific and reinstalled from requirements during build',
+  },
+  {
+    pattern: '**/venv',
+    matchers: [/(^|\/)venv(\/|$)/],
+    reason: 'Virtualenvs are platform-specific and reinstalled from requirements during build',
+  },
+  {
+    pattern: '**/.tox',
+    matchers: [/(^|\/)\.tox(\/|$)/],
+    reason: 'tox environments are rebuilt on demand',
+  },
+  {
+    pattern: '**/.mypy_cache',
+    matchers: [/(^|\/)\.mypy_cache(\/|$)/],
+    reason: 'Type-checker cache is regenerated on demand',
+  },
+  {
+    pattern: '**/.pytest_cache',
+    matchers: [/(^|\/)\.pytest_cache(\/|$)/],
+    reason: 'Test-runner cache is regenerated on demand',
+  },
+  {
+    pattern: '**/.ruff_cache',
+    matchers: [/(^|\/)\.ruff_cache(\/|$)/],
+    reason: 'Linter cache is regenerated on demand',
+  },
+  {
+    pattern: '**/*.egg-info',
+    matchers: [/\.egg-info(\/|$)/],
+    reason: 'Python packaging metadata is regenerated during build',
+  },
+  {
+    pattern: '**/.env*',
+    matchers: [/(^|\/)\.env(\.|$)/],
     reason: 'Environment files must never be baked into images',
   },
   {
-    pattern: '*.md',
-    matchers: [/\.md$/i, /\.mdx$/i],
+    pattern: '**/*.md',
+    matchers: [/\.mdx?$/i],
     reason: 'Documentation files are not needed at runtime',
   },
   {
-    pattern: 'test',
-    matchers: [/^tests?(\/|$)/, /__tests__(\/|$)/, /\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/],
-    reason: 'Test files and directories are not needed in production images',
+    pattern: 'tests',
+    matchers: [/^tests?(\/|$)/],
+    reason: 'Test directories are not needed in production images',
+  },
+  {
+    pattern: '**/__tests__',
+    matchers: [/__tests__(\/|$)/],
+    reason: 'Test directories are not needed in production images',
+  },
+  {
+    pattern: '**/*.test.*',
+    matchers: [/\.test\.[jt]sx?$/],
+    reason: 'Test files are not needed in production images',
+  },
+  {
+    pattern: '**/*.spec.*',
+    matchers: [/\.spec\.[jt]sx?$/],
+    reason: 'Spec files are not needed in production images',
   },
   {
     pattern: '.vscode',
@@ -54,6 +122,21 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
     reason: 'Build artifacts should be produced inside the Docker build',
   },
   {
+    pattern: 'target',
+    matchers: [/^target(\/|$)/],
+    reason: 'Rust and Maven build output should be produced inside the Docker build',
+  },
+  {
+    pattern: 'vendor',
+    matchers: [/^vendor(\/|$)/],
+    reason: 'Vendored dependencies are restored during build',
+  },
+  {
+    pattern: '.gradle',
+    matchers: [/^\.gradle(\/|$)/],
+    reason: 'Gradle cache is regenerated inside the Docker build',
+  },
+  {
     pattern: 'coverage',
     matchers: [/^coverage(\/|$)/],
     reason: 'Test coverage reports are not needed in production images',
@@ -69,17 +152,17 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
     reason: 'Nuxt.js build cache should be regenerated inside the Docker build',
   },
   {
-    pattern: '*.log',
+    pattern: '**/*.log',
     matchers: [/\.log$/],
     reason: 'Log files are generated at runtime and must not be baked in',
   },
   {
-    pattern: '.DS_Store',
+    pattern: '**/.DS_Store',
     matchers: [/\.DS_Store$/],
     reason: 'macOS metadata files are irrelevant in Linux containers',
   },
   {
-    pattern: 'Thumbs.db',
+    pattern: '**/Thumbs.db',
     matchers: [/Thumbs\.db$/],
     reason: 'Windows thumbnail cache files are irrelevant in Linux containers',
   },
@@ -89,11 +172,14 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
     reason: 'Terraform state and provider cache should not be copied into images',
   },
   {
-    pattern: '*.tfstate*',
+    pattern: '**/*.tfstate*',
     matchers: [/\.tfstate/],
     reason: 'Terraform state files may contain secrets and are not needed at runtime',
   },
 ];
+
+/** Exported for the invariant test that keeps patterns and matchers in sync. */
+export const EXCLUDABLE_PATTERNS_FOR_TEST = EXCLUDABLE_PATTERNS;
 
 function stripInlineComment(line: string): string {
   // Docker only honours '#' at column 1 as a comment; a '#' mid-line is part of
@@ -321,6 +407,11 @@ export function analyze(targetPath: string): AnalysisResult {
   // Calculate which patterns apply and their savings
   const suggestedRules: PatternSuggestion[] = [];
 
+  // Union of files covered by any suggested rule, used for the aggregate.
+
+  const coveredFiles = new Set<string>();
+
+
   for (const def of EXCLUDABLE_PATTERNS) {
     // Skip patterns already covered by existing dockerignore
     const alreadyCovered = existingRules.some((rule) => {
@@ -346,6 +437,13 @@ export function analyze(targetPath: string): AnalysisResult {
 
     const savings = topLevelMatches.reduce((sum, e) => sum + e.size, 0);
 
+    // Remember which files this rule covers. Rules can overlap: **/*.pyc lives
+    // inside **/__pycache__, so summing per-rule savings would double-count and
+    // report a larger reduction than applying every rule actually delivers.
+    for (const entry of matchingEntries) {
+      if (!entry.isDirectory) coveredFiles.add(entry.path);
+    }
+
     suggestedRules.push({
       pattern: def.pattern,
       reason: def.reason,
@@ -356,10 +454,13 @@ export function analyze(targetPath: string): AnalysisResult {
   // Sort suggestions by savings descending
   suggestedRules.sort((a, b) => b.estimatedSavingsBytes - a.estimatedSavingsBytes);
 
-  const estimatedReducedSizeBytes = Math.max(
-    0,
-    totalSizeBytes - suggestedRules.reduce((sum, r) => sum + r.estimatedSavingsBytes, 0)
-  );
+  // Sum the union of covered files rather than the per-rule savings, so
+  // overlapping rules cannot push the reported reduction past 100%.
+  const uniqueSavingsBytes = entries
+    .filter((e) => !e.isDirectory && coveredFiles.has(e.path))
+    .reduce((sum, e) => sum + e.size, 0);
+
+  const estimatedReducedSizeBytes = Math.max(0, totalSizeBytes - uniqueSavingsBytes);
 
   const reductionPercentage =
     totalSizeBytes > 0
