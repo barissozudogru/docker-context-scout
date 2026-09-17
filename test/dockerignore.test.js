@@ -87,6 +87,24 @@ test("a recursive directory rule stays on segment boundaries", (t) => {
   assert.equal(result.totalSizeBytes, 50 + "**/node_modules\n".length);
 });
 
+test("a mid-path '**' covers zero directories but keeps whole segments", (t) => {
+  const result = analyzeTree(t, "a/**/b\n", {
+    "a/b/inside.bin": "I".repeat(30),
+    "a/x/b/deep.bin": "D".repeat(40),
+    "a/x/y/b/verydeep.bin": "V".repeat(20),
+    "ab/falsematch.bin": "F".repeat(50),
+    "aa/b/edge.bin": "E".repeat(60),
+    "src/app.js": "A".repeat(10),
+  });
+
+  // `a/**/b` covers zero or more directories between a and b, so a/b itself
+  // goes too. The paths ab and aa/b stay: Docker matches `a` as one whole
+  // directory name, so a rule that glues a onto the next segment would match
+  // nothing at all.
+  assert.equal(result.fileCount, 4);
+  assert.equal(result.totalSizeBytes, 50 + 60 + 10 + "a/**/b\n".length);
+});
+
 test("a one-level wildcard does not reach past its own depth", (t) => {
   const result = analyzeTree(t, "*/temp*\n", {
     "somedir/temporary.txt": "t".repeat(4),

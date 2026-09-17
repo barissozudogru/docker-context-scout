@@ -250,18 +250,21 @@ function dockerignoreGlobToRegex(rule: string): RegExp {
 
   let reStr = '';
   segments.forEach((segment, index) => {
+    // A segment in the middle of the rule is glued to the one before it by a
+    // separator. The one exception follows a '**', which has already swallowed
+    // that separator on its right. Without the separator a rule such as
+    // `a/**/b` would match `ab` while never matching `a/b`.
+    if (index > 0 && segments[index - 1] !== '**') {
+      reStr += '/';
+    }
+
     if (segment === '**') {
-      // A whole '**' segment matches zero or more directories and swallows the
-      // separator on its right, so '**/foo' hits both 'foo' and 'a/b/foo'.
+      // A whole '**' segment matches zero or more directories, so '**/foo'
+      // hits both 'foo' and 'a/b/foo'.
       reStr += '(?:[^/]+/)*';
       return;
     }
 
-    // Any other segment is one path component, and the separator on its left
-    // is optional only directly after a '**'.
-    if (index > 0 && segments[index - 1] !== '**') {
-      reStr += '/';
-    }
     let i = 0;
     while (i < segment.length) {
       if (segment[i] === '*') {
