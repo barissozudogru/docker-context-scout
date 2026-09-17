@@ -224,48 +224,63 @@ function readDockerignore(dirPath: string): { rules: CompiledRule[]; all: string
 /**
  * Convert a single .dockerignore glob rule into a RegExp.
  * Docker's glob semantics:
+ *   - Matching happens against the path relative to the context root. Leading
+ *     and trailing slashes are disregarded, and a slash-free rule such as
+ *     `node_modules` matches only the root entry, never `pkg/node_modules`.
  *   - '*' matches any sequence of non-separator characters (not '/')
- *   - '**' matches any sequence including separators
+ *   - '**' as a whole path segment matches any number of directories, zero included
  *   - '?' matches a single non-separator character
- *   - A leading '/' anchors to the root; without it, the pattern matches anywhere in the path
  */
 function dockerignoreGlobToRegex(rule: string): RegExp {
-  const normalized = rule.replace(/\\/g, '/').replace(/\/$/, '');
-
-  // Anchor: if the rule contains a slash (other than trailing), it is relative to root
-  const anchored = normalized.startsWith('/') || normalized.includes('/');
+  const normalized = rule.replace(/\\/g, '/').replace(/\/+$/, '');
   const stripped = normalized.startsWith('/') ? normalized.slice(1) : normalized;
+  const segments = stripped.split('/').filter((s) => s !== '');
+
+  // A trailing '**' adds nothing: the suffix appended below already allows any
+  // subtree below a match, so 'logs/**' behaves like 'logs'.
+  while (segments.length > 1 && segments[segments.length - 1] === '**') {
+    segments.pop();
+  }
+
+  // A lone '**' matches the whole tree, which the segment loop below cannot
+  // express because it only ever matches complete path segments.
+  if (segments.length === 1 && segments[0] === '**') {
+    return /^.*$/;
+  }
 
   let reStr = '';
-  let i = 0;
-  while (i < stripped.length) {
-    if (stripped[i] === '*' && stripped[i + 1] === '*') {
-      // '**' - match anything including slashes
-      reStr += '.*';
-      i += 2;
-      // consume surrounding slashes: /**/  or leading /**/
-      if (stripped[i] === '/') i++;
-    } else if (stripped[i] === '*') {
-      // '*' - match anything except '/'
-      reStr += '[^/]*';
-      i++;
-    } else if (stripped[i] === '?') {
-      reStr += '[^/]';
-      i++;
-    } else {
-      // Escape regex metacharacters
-      reStr += stripped[i].replace(/[.+^${}()|[\]\\]/g, '\\$&');
-      i++;
+  segments.forEach((segment, index) => {
+    if (segment === '**') {
+      // A whole '**' segment matches zero or more directories and swallows the
+      // separator on its right, so '**/foo' hits both 'foo' and 'a/b/foo'.
+      reStr += '(?:[^/]+/)*';
+      return;
     }
-  }
 
-  if (anchored) {
-    // Pattern must match from the start of the relative path
-    return new RegExp(`^${reStr}(/.*)?$`);
-  } else {
-    // Pattern may match anywhere as a path segment
-    return new RegExp(`(^|/)${reStr}(/.*)?$`);
-  }
+    // Any other segment is one path component, and the separator on its left
+    // is optional only directly after a '**'.
+    if (index > 0 && segments[index - 1] !== '**') {
+      reStr += '/';
+    }
+    let i = 0;
+    while (i < segment.length) {
+      if (segment[i] === '*') {
+        // '*' never crosses a '/', and neither do the double stars inside a
+        // segment such as 'a**b'; only a whole '**' segment spans directories.
+        reStr += '[^/]*';
+        i++;
+      } else if (segment[i] === '?') {
+        reStr += '[^/]';
+        i++;
+      } else {
+        // Escape regex metacharacters
+        reStr += segment[i].replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        i++;
+      }
+    }
+  });
+
+  return new RegExp(`^${reStr}(/.*)?$`);
 }
 
 function matchesDockerignore(
@@ -413,10 +428,14 @@ export function analyze(targetPath: string): AnalysisResult {
 
 
   for (const def of EXCLUDABLE_PATTERNS) {
-    // Skip patterns already covered by existing dockerignore
+    // Skip patterns already covered by existing dockerignore. Only the exact
+    // pattern counts as coverage: a bare `node_modules` rule excludes the root
+    // directory alone, so nested instances still justify suggesting
+    // `**/node_modules`, and the empty match list below keeps the suggestion
+    // away when nothing is left to exclude.
     const alreadyCovered = existingRules.some((rule) => {
       const r = rule.replace(/\\/g, '/').replace(/\/$/, '');
-      return r === def.pattern || r === def.pattern.replace(/\*\//g, '');
+      return r === def.pattern;
     });
     if (alreadyCovered) continue;
 
