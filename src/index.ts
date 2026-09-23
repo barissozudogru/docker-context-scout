@@ -308,12 +308,7 @@ function walkDirectory(
   entries: FileEntry[],
   visitedInodes: Set<number>
 ): void {
-  let items: fs.Dirent[];
-  try {
-    items = fs.readdirSync(dirPath, { withFileTypes: true });
-  } catch {
-    return;
-  }
+  const items = fs.readdirSync(dirPath, { withFileTypes: true });
 
   for (const item of items) {
     const fullPath = path.join(dirPath, item.name);
@@ -327,8 +322,11 @@ function walkDirectory(
       let stat: fs.Stats;
       try {
         stat = fs.statSync(fullPath);
-      } catch {
-        continue;
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
+          continue;
+        }
+        throw err;
       }
 
       if (stat.isDirectory()) {
@@ -355,12 +353,7 @@ function walkDirectory(
         entries.push({ path: relPath, size: stat.size, isDirectory: false });
       }
     } else if (item.isDirectory()) {
-      let stat: fs.Stats;
-      try {
-        stat = fs.statSync(fullPath);
-      } catch {
-        continue;
-      }
+      const stat = fs.statSync(fullPath);
       if (visitedInodes.has(stat.ino)) {
         continue;
       }
@@ -380,13 +373,8 @@ function walkDirectory(
       }
       entries[entryIndex].size = dirSize;
     } else if (item.isFile()) {
-      let size = 0;
-      try {
-        size = fs.statSync(fullPath).size;
-      } catch {
-        size = 0;
-      }
-      entries.push({ path: relPath, size, isDirectory: false });
+      const stat = fs.statSync(fullPath);
+      entries.push({ path: relPath, size: stat.size, isDirectory: false });
     }
   }
 }

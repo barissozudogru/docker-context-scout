@@ -137,3 +137,39 @@ test("a lone '**' excludes everything", (t) => {
   assert.equal(result.fileCount, 0);
   assert.equal(result.totalSizeBytes, 0);
 });
+
+test("inaccessible directories bubble up permission errors", (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX permissions are not enforced on Windows");
+    return;
+  }
+
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-perm-"));
+  const secretDir = path.join(root, "secret");
+  fs.mkdirSync(secretDir);
+  fs.writeFileSync(path.join(secretDir, "file.txt"), "hello");
+  fs.chmodSync(secretDir, 0);
+
+  t.after(() => {
+    fs.chmodSync(secretDir, 0o755);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  assert.throws(
+    () => analyze(root),
+    (err) => err.code === "EACCES" || err.code === "EPERM"
+  );
+});
+
+test("broken symlinks are skipped without error", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-sym-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  fs.symlinkSync("nonexistent", path.join(root, "broken_link"));
+  fs.writeFileSync(path.join(root, "app.js"), "hello");
+
+  const result = analyze(root);
+  assert.equal(result.fileCount, 1);
+  assert.equal(result.totalSizeBytes, 5);
+});
+
