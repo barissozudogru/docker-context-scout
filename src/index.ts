@@ -437,13 +437,18 @@ export function analyze(targetPath: string): AnalysisResult {
 
     if (matchingEntries.length === 0) continue;
 
-    // For directories, use the directory size entry directly; avoid double-counting
-    // by summing only top-level matched entries (not their children)
-    const topLevelMatches = matchingEntries.filter((entry) => {
-      return !matchingEntries.some(
-        (other) => other.isDirectory && entry.path.startsWith(other.path + '/')
-      );
-    });
+    // For directories, use the directory size entry directly and avoid double
+    // counting by summing only top-level matched entries. Extract directory
+    // prefixes once so file-heavy match lists do not perform quadratic scans.
+    const matchedDirs = matchingEntries
+      .filter((e) => e.isDirectory)
+      .map((e) => e.path + '/');
+
+    const topLevelMatches = matchedDirs.length === 0
+      ? matchingEntries
+      : matchingEntries.filter((entry) => {
+          return !matchedDirs.some((dir) => entry.path.startsWith(dir));
+        });
 
     const savings = topLevelMatches.reduce((sum, e) => sum + e.size, 0);
 
