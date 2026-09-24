@@ -173,3 +173,24 @@ test("broken symlinks are skipped without error", (t) => {
   assert.equal(result.totalSizeBytes, 5);
 });
 
+test("many matching files calculate savings without quadratic slowdown", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-scale-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const count = 12000;
+  for (let i = 0; i < count; i++) {
+    fs.closeSync(fs.openSync(path.join(root, `${i}.test.js`), "w"));
+  }
+
+  const start = performance.now();
+  const result = analyze(root);
+  const elapsed = performance.now() - start;
+
+  assert.equal(result.fileCount, count);
+  const suggestion = result.suggestedRules.find((r) => r.pattern === "**/*.test.*");
+  assert.ok(suggestion, "matching rule must be suggested");
+
+  assert.ok(elapsed < 300, `analysis took ${elapsed.toFixed(1)}ms, expected under 300ms`);
+});
+
+
