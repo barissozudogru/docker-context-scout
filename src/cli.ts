@@ -163,8 +163,8 @@ function parseThreshold(args: string[]): number {
     console.error('Error: --threshold requires a numeric value in MB (e.g. --threshold 10)');
     process.exit(1);
   }
-  const mb = parseFloat(raw);
-  if (isNaN(mb) || mb < 0) {
+  const mb = Number(raw);
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(raw.trim()) || !Number.isFinite(mb) || mb < 0) {
     console.error(`Error: invalid threshold value "${raw}". Must be a non-negative number.`);
     process.exit(1);
   }
