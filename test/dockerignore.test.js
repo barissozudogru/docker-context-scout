@@ -34,6 +34,18 @@ const NESTED_TREE = {
   "src/app.js": "A".repeat(10),
 };
 
+test("a hash in a rule is literal unless it starts the line", (t) => {
+  const result = analyzeTree(t, "foo#bar\n", {
+    foo: "root",
+    "foo#bar": "ignored",
+  });
+
+  assert.deepEqual(result.existingDockerignoreRules, ["foo#bar"]);
+  assert.equal(result.fileCount, 2);
+  assert.ok(result.topOffenders.some((entry) => entry.path === "foo"));
+  assert.ok(!result.topOffenders.some((entry) => entry.path === "foo#bar"));
+});
+
 test("a bare rule excludes only the root entry, nested copies stay in the context", (t) => {
   const result = analyzeTree(t, "node_modules\n", NESTED_TREE);
 
@@ -192,5 +204,4 @@ test("many matching files calculate savings without quadratic slowdown", (t) => 
 
   assert.ok(elapsed < 300, `analysis took ${elapsed.toFixed(1)}ms, expected under 300ms`);
 });
-
 
