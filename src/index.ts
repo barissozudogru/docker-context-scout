@@ -182,11 +182,9 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
 export const EXCLUDABLE_PATTERNS_FOR_TEST = EXCLUDABLE_PATTERNS;
 
 function stripInlineComment(line: string): string {
-  // Docker only honours '#' at column 1 as a comment; a '#' mid-line is part of
-  // the pattern. For comparison we drop anything after the first inline '#',
-  // so a hand-annotated rule is still recognised as covering its pattern.
-  const hashIndex = line.indexOf('#');
-  return hashIndex > 0 ? line.slice(0, hashIndex).trim() : line;
+  // Docker only honours '#' at column 1 as a comment; a '#' mid-line is part
+  // of the pattern.
+  return line;
 }
 
 interface CompiledRule {
