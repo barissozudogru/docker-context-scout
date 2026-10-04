@@ -394,6 +394,10 @@ export function analyze(targetPath: string): AnalysisResult {
     throw new Error(`Path does not exist: ${resolvedPath}`);
   }
 
+  if (!fs.statSync(resolvedPath).isDirectory()) {
+    throw new Error(`Path is not a directory: ${resolvedPath}`);
+  }
+
   const { rules, all: existingRules } = readDockerignore(resolvedPath);
   const entries: FileEntry[] = [];
 
