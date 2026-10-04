@@ -82,8 +82,13 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
     reason: 'Documentation files are not needed at runtime',
   },
   {
+    pattern: 'test',
+    matchers: [/^test(\/|$)/],
+    reason: 'Test directories are not needed in production images',
+  },
+  {
     pattern: 'tests',
-    matchers: [/^tests?(\/|$)/],
+    matchers: [/^tests(\/|$)/],
     reason: 'Test directories are not needed in production images',
   },
   {

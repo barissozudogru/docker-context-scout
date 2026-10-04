@@ -87,6 +87,17 @@ test("nested copies behind a bare rule still earn the recursive suggestion", (t)
   assert.equal(suggestion.estimatedSavingsBytes, 200);
 });
 
+test("a test directory suggestion matches the emitted Docker rule", (t) => {
+  const result = analyzeTree(t, null, {
+    "test/unit.js": "u".repeat(12),
+  });
+
+  const suggestion = result.suggestedRules.find((r) => r.pattern === "test");
+  assert.ok(suggestion, "the root test directory must get a matching suggestion");
+  assert.equal(suggestion.estimatedSavingsBytes, 12);
+  assert.ok(!result.suggestedRules.some((r) => r.pattern === "tests"));
+});
+
 test("the recursive suggestion is not repeated once the recursive rule exists", (t) => {
   const result = analyzeTree(t, "**/node_modules\n", NESTED_TREE);
 
