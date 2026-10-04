@@ -312,7 +312,8 @@ function walkDirectory(
     const fullPath = path.join(dirPath, item.name);
     const relPath = path.relative(rootPath, fullPath).replace(/\\/g, '/');
 
-    if (matchesDockerignore(relPath, rules)) {
+    const isBuildControlFile = relPath === 'Dockerfile' || relPath === '.dockerignore';
+    if (!isBuildControlFile && matchesDockerignore(relPath, rules)) {
       continue;
     }
 

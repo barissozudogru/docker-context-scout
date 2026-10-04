@@ -46,6 +46,19 @@ test("a hash in a rule is literal unless it starts the line", (t) => {
   assert.ok(!result.topOffenders.some((entry) => entry.path === "foo#bar"));
 });
 
+test("root Dockerfile and .dockerignore remain in the context when ignored", (t) => {
+  const result = analyzeTree(t, "*\n", {
+    Dockerfile: "FROM scratch\n",
+  });
+
+  assert.equal(result.fileCount, 2);
+  assert.equal(result.totalSizeBytes, "FROM scratch\n".length + "*\n".length);
+  assert.deepEqual(
+    result.topOffenders.map((entry) => entry.path).sort(),
+    [".dockerignore", "Dockerfile"]
+  );
+});
+
 test("a bare rule excludes only the root entry, nested copies stay in the context", (t) => {
   const result = analyzeTree(t, "node_modules\n", NESTED_TREE);
 
@@ -140,14 +153,15 @@ test("a trailing '**' behaves like the bare directory", (t) => {
   assert.equal(result.totalSizeBytes, 10 + "logs/**\n".length);
 });
 
-test("a lone '**' excludes everything", (t) => {
+test("a lone '**' excludes regular files but keeps Docker build control files", (t) => {
   const result = analyzeTree(t, "**\n", {
     "src/app.js": "A".repeat(10),
     "README.md": "r".repeat(5),
   });
 
-  assert.equal(result.fileCount, 0);
-  assert.equal(result.totalSizeBytes, 0);
+  assert.equal(result.fileCount, 1);
+  assert.equal(result.totalSizeBytes, "**\n".length);
+  assert.deepEqual(result.topOffenders.map((entry) => entry.path), [".dockerignore"]);
 });
 
 test("inaccessible directories bubble up permission errors", (t) => {
@@ -204,4 +218,3 @@ test("many matching files calculate savings without quadratic slowdown", (t) => 
 
   assert.ok(elapsed < 300, `analysis took ${elapsed.toFixed(1)}ms, expected under 300ms`);
 });
-
