@@ -28,6 +28,18 @@ function analyzeTree(t, dockerignore, files) {
   return analyze(root);
 }
 
+test("rejects a regular file as the analysis path", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-file-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const file = path.join(root, "input.txt");
+  fs.writeFileSync(file, "content");
+
+  assert.throws(
+    () => analyze(file),
+    (error) => error instanceof Error && error.message === `Path is not a directory: ${file}`
+  );
+});
+
 const NESTED_TREE = {
   "node_modules/root.bin": "R".repeat(100),
   "packages/a/node_modules/nested.bin": "N".repeat(200),
