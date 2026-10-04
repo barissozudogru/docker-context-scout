@@ -98,6 +98,16 @@ test("a test directory suggestion matches the emitted Docker rule", (t) => {
   assert.ok(!result.suggestedRules.some((r) => r.pattern === "tests"));
 });
 
+test("the environment glob matches every basename beginning with .env", (t) => {
+  const result = analyzeTree(t, null, {
+    ".environment": "e".repeat(17),
+  });
+
+  const suggestion = result.suggestedRules.find((r) => r.pattern === "**/.env*");
+  assert.ok(suggestion, "the .env* rule must include matching basenames");
+  assert.equal(suggestion.estimatedSavingsBytes, 17);
+});
+
 test("the recursive suggestion is not repeated once the recursive rule exists", (t) => {
   const result = analyzeTree(t, "**/node_modules\n", NESTED_TREE);
 

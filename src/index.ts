@@ -73,7 +73,7 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
   },
   {
     pattern: '**/.env*',
-    matchers: [/(^|\/)\.env(\.|$)/],
+    matchers: [/(^|\/)\.env[^\/]*(\/|$)/],
     reason: 'Environment files must never be baked into images',
   },
   {
