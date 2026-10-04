@@ -1,6 +1,11 @@
 # docker-context-scout
 
-Find out what Docker is sending as build context and cut it down to size.
+[![npm version](https://img.shields.io/npm/v/@barissozudogru/docker-context-scout)](https://www.npmjs.com/package/@barissozudogru/docker-context-scout)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](./LICENSE)
+
+[npm](https://www.npmjs.com/package/@barissozudogru/docker-context-scout) · [Source](https://github.com/barissozudogru/docker-context-scout) · [Issues](https://github.com/barissozudogru/docker-context-scout/issues)
+
+Inspect local build context files and review suggested `.dockerignore` rules.
 
 Run without installing:
 
@@ -8,9 +13,16 @@ Run without installing:
 npx @barissozudogru/docker-context-scout
 ```
 
-Every time you run `docker build`, Docker compresses and streams your entire project directory to the build daemon before a single instruction executes. On a typical Node.js or Python project it is not uncommon to send 400 MB or more of `node_modules`, `.git`, and build artifacts that your final image doesn't need. This slows down builds because Docker re-uploads the full context even for layer-cache hits, risks baking secrets like `.env` files or Terraform state into image layers, and creates unnecessarily large images.
+A local build context makes files available to Docker's builder. Dependencies,
+Git metadata, build artifacts, and credential files can be unnecessary inputs.
+A suitable `.dockerignore` reduces those inputs and helps prevent accidental
+inclusion. [Docker loads context files as needed](https://docs.docker.com/build/concepts/context/);
+this tool's filesystem totals are not measurements of bytes transferred or final
+image size.
 
-docker-context-scout walks your project, measures each entry, cross-references your existing `.dockerignore`, and tells you exactly what is bloating your build context and how to fix it. A single `--fix` flag writes the `.dockerignore` rules for you.
+`docker-context-scout` walks the selected directory, measures entries, checks
+`.dockerignore`, and suggests rules. Review the suggestions against your Dockerfile
+before using `--fix`: some builds intentionally copy prebuilt artifacts.
 
 ## Usage
 
@@ -67,40 +79,12 @@ docker-context-scout --threshold 10
 
 ---
 
-## Example Output
+## Reading the report
 
-```
-  Docker Context Scout
-------------------------------------------------------------
-  Path:        /Users/you/my-app
-  Total size:  487.20 MB (6 241 files)
-  .dockerignore: not found
-
-  Top items by size:
-------------------------------------------------------------
-  [dir ]  node_modules                                342.00 MB
-  [dir ]  .git                                         89.00 MB
-  [dir ]  dist                                         38.10 MB
-  [dir ]  coverage                                     14.80 MB
-  [file]  db/seed-data.sql                              2.90 MB
-  [dir ]  .next                                         0.40 MB
-
-  Suggested .dockerignore rules:
-------------------------------------------------------------
-  node_modules               saves ~   342.00 MB  Dependencies are reinstalled during build
-  .git                       saves ~    89.00 MB  Git metadata is never needed in Docker images
-  dist                       saves ~    38.10 MB  Build artifacts should be produced inside the Docker build
-  coverage                   saves ~    14.80 MB  Test coverage reports are not needed in production images
-  .next                      saves ~     0.40 MB  Next.js build cache should be regenerated inside the Docker build
-
-------------------------------------------------------------
-  Estimated context after optimization: 12.00 MB
-  Potential reduction: 97.5% (475.20 MB)
-```
-
-After running `--fix`, a `.dockerignore` is created with all suggested rules.
-
----
+The report shows directory size, file count, the largest entries, suggested ignore
+rules, and estimated savings. `--json` exposes the same analysis for scripts.
+These are local filesystem estimates. Confirm actual build context transfer in
+Docker's build output after reviewing changes to `.dockerignore`.
 
 ## What It Detects
 
@@ -142,33 +126,11 @@ Use `--json` to gate builds on context size in any CI pipeline.
 docker-context-scout --json | jq '.reductionPercentage'
 ```
 
-### Full JSON schema
+### JSON fields
 
-```json
-{
-  "analyzedPath": "/absolute/path",
-  "totalSizeBytes": 510980096,
-  "totalSizeMB": 487.20,
-  "fileCount": 6241,
-  "dockerfileFound": true,
-  "existingDockerignoreRules": [],
-  "topOffenders": [
-    { "path": "node_modules", "size": 358612992, "isDirectory": true }
-  ],
-  "suggestedRules": [
-    {
-      "pattern": "node_modules",
-      "reason": "Dependencies are reinstalled during build via npm/yarn/pnpm install",
-      "estimatedSavingsBytes": 358612992
-    }
-  ],
-  "estimatedReducedSizeBytes": 12582912,
-  "estimatedReducedSizeMB": 12.00,
-  "reductionPercentage": 97.5
-}
-```
-
----
+`--json` returns the scanned path, total size and file count, sized entries,
+suggested rules, estimated optimised size, and potential reduction. Sizes and
+savings depend on the scanned directory and its existing `.dockerignore`.
 
 ## Exit Codes
 
@@ -178,6 +140,20 @@ docker-context-scout --json | jq '.reductionPercentage'
 | `1` | Error - invalid path, unreadable directory, or bad argument |
 
 ---
+
+## Development and support
+
+Report problems through [GitHub issues](https://github.com/barissozudogru/docker-context-scout/issues). See [CONTRIBUTING.md](./CONTRIBUTING.md) for the contribution workflow.
+
+To build and test a source checkout with Node.js 22:
+
+```bash
+npm ci
+npm test
+npm run build
+```
+
+The default branch can contain changes that have not yet been published to npm.
 
 ## License
 
