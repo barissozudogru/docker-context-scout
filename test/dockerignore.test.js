@@ -120,6 +120,17 @@ test("the environment glob matches every basename beginning with .env", (t) => {
   assert.equal(suggestion.estimatedSavingsBytes, 17);
 });
 
+test("the markdown suggestion does not claim to exclude markdown extensions it cannot match", (t) => {
+  const result = analyzeTree(t, null, {
+    "README.md": "m".repeat(11),
+    "guide.mdx": "x".repeat(13),
+  });
+
+  const suggestion = result.suggestedRules.find((r) => r.pattern === "**/*.md");
+  assert.ok(suggestion, "the .md rule should be suggested for markdown files");
+  assert.equal(suggestion.estimatedSavingsBytes, 11);
+});
+
 test("the recursive suggestion is not repeated once the recursive rule exists", (t) => {
   const result = analyzeTree(t, "**/node_modules\n", NESTED_TREE);
 
