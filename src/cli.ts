@@ -168,7 +168,12 @@ function parseThreshold(args: string[]): number {
     console.error(`Error: invalid threshold value "${raw}". Must be a non-negative number.`);
     process.exit(1);
   }
-  return mb * 1024 * 1024;
+  const bytes = mb * 1024 * 1024;
+  if (!Number.isFinite(bytes)) {
+    console.error(`Error: invalid threshold value "${raw}". Must be a non-negative number.`);
+    process.exit(1);
+  }
+  return bytes;
 }
 
 function main(): void {

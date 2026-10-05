@@ -22,7 +22,7 @@ test("threshold rejects a numeric prefix followed by invalid characters", () => 
   assert.match(result.stderr, /invalid threshold value/);
 });
 
-for (const value of [" ", "0x10", "Infinity"]) {
+for (const value of [" ", "0x10", "Infinity", "1e308"]) {
   test(`threshold rejects non-decimal input ${JSON.stringify(value)}`, () => {
     const cliPath = path.resolve("dist/cli.js");
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
