@@ -87,7 +87,7 @@ function printPretty(result: AnalysisResult, thresholdBytes: number): void {
   const filtered =
     thresholdBytes > 0
       ? result.topOffenders.filter((e) => e.size >= thresholdBytes)
-      : result.topOffenders.slice(0, 10);
+      : result.topOffenders;
 
   if (filtered.length === 0) {
     console.log(c.dim(`  No items above ${formatBytes(thresholdBytes)}.`));

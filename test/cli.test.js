@@ -49,3 +49,19 @@ for (const value of ["0", "0.5", ".5", "+1", "1e1", "1.5e-1"]) {
     }
   });
 }
+
+test("default report shows all retained top offenders", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  try {
+    for (let i = 0; i < 11; i++) {
+      fs.writeFileSync(path.join(cwd, `file-${i}.txt`), "x");
+    }
+
+    const result = spawnSync(process.execPath, [cliPath, cwd], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal((result.stdout.match(/^  \[file\]/gm) ?? []).length, 11);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
