@@ -424,8 +424,6 @@ export function analyze(targetPath: string): AnalysisResult {
   // Union of files covered by any suggested rule, used for the aggregate.
 
   const coveredFiles = new Set<string>();
-
-
   for (const def of EXCLUDABLE_PATTERNS) {
     // Skip patterns already covered by existing dockerignore. Only the exact
     // pattern counts as coverage: a bare `node_modules` rule excludes the root
@@ -451,11 +449,23 @@ export function analyze(targetPath: string): AnalysisResult {
     const matchedDirs = matchingEntries
       .filter((e) => e.isDirectory)
       .map((e) => e.path + '/');
+    const matchedDirSet = new Set(matchedDirs);
+
+    const hasMatchedDirectoryAncestor = (entryPath: string): boolean => {
+      let separator = entryPath.indexOf('/');
+      while (separator !== -1) {
+        if (matchedDirSet.has(entryPath.slice(0, separator + 1))) {
+          return true;
+        }
+        separator = entryPath.indexOf('/', separator + 1);
+      }
+      return false;
+    };
 
     const topLevelMatches = matchedDirs.length === 0
       ? matchingEntries
       : matchingEntries.filter((entry) => {
-          return !matchedDirs.some((dir) => entry.path.startsWith(dir));
+          return !hasMatchedDirectoryAncestor(entry.path);
         });
 
     const savings = topLevelMatches.reduce((sum, e) => sum + e.size, 0);
