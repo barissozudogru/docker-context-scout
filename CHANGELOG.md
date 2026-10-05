@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and 
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Normalize dot segments in `.dockerignore` patterns before matching.
+
 ## [0.4.0] - 2026-08-19
 
 ### Fixed

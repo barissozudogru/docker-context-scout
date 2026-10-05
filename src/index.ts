@@ -235,7 +235,15 @@ function readDockerignore(dirPath: string): { rules: CompiledRule[]; all: string
  *   - '?' matches a single non-separator character
  */
 function dockerignoreGlobToRegex(rule: string): RegExp {
-  const normalized = rule.replace(/\\/g, '/').replace(/\/+$/, '');
+  // Docker preprocesses patterns with filepath.Clean, so equivalent forms
+  // such as `./dist` and `dist/../dist` must match the same context paths.
+  const cleaned = path.posix.normalize(rule.replace(/\\/g, '/'));
+  if (cleaned === '.') {
+    // Docker treats a lone `.` as a no-op pattern.
+    return /a^/;
+  }
+
+  const normalized = cleaned.replace(/\/+$/, '');
   const stripped = normalized.startsWith('/') ? normalized.slice(1) : normalized;
   const segments = stripped.split('/').filter((s) => s !== '');
 
