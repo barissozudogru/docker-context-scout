@@ -78,7 +78,7 @@ const EXCLUDABLE_PATTERNS: Array<{ pattern: string; matchers: RegExp[]; reason: 
   },
   {
     pattern: '**/*.md',
-    matchers: [/\.mdx?$/i],
+    matchers: [/\.md$/i],
     reason: 'Documentation files are not needed at runtime',
   },
   {
