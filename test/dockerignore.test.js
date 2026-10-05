@@ -58,6 +58,28 @@ test("a hash in a rule is literal unless it starts the line", (t) => {
   assert.ok(!result.topOffenders.some((entry) => entry.path === "foo#bar"));
 });
 
+test("dockerignore patterns clean dot segments before matching", (t) => {
+  for (const pattern of ["./dist", "dist/../dist", "./dist/././"]) {
+    const result = analyzeTree(t, `${pattern}\n`, {
+      "dist/output.bin": "x".repeat(9),
+    });
+
+    assert.equal(result.fileCount, 1, pattern);
+    assert.equal(result.totalSizeBytes, `${pattern}\n`.length, pattern);
+    assert.deepEqual(result.topOffenders.map((entry) => entry.path), [".dockerignore"], pattern);
+  }
+});
+
+test("a lone dot dockerignore pattern is a no-op", (t) => {
+  const result = analyzeTree(t, ".\n", {
+    "dist/output.bin": "x".repeat(9),
+  });
+
+  assert.equal(result.fileCount, 2);
+  assert.equal(result.totalSizeBytes, 9 + ".\n".length);
+  assert.deepEqual(result.topOffenders.map((entry) => entry.path).sort(), [".dockerignore", "dist", "dist/output.bin"]);
+});
+
 test("root Dockerfile and .dockerignore remain in the context when ignored", (t) => {
   const result = analyzeTree(t, "*\n", {
     Dockerfile: "FROM scratch\n",
