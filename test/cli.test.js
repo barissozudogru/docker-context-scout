@@ -65,3 +65,39 @@ test("default report shows all retained top offenders", () => {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test("json mode combined with fix outputs parseable JSON on stdout and status on stderr", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  try {
+    fs.mkdirSync(path.join(cwd, ".git"));
+    fs.writeFileSync(path.join(cwd, ".git", "HEAD"), "ref: refs/heads/main\n");
+
+    const result = spawnSync(process.execPath, [cliPath, cwd, "--json", "--fix"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(typeof parsed, "object");
+    assert.match(result.stderr, /Created .*?\.dockerignore with \d+ rules/);
+
+    const secondResult = spawnSync(process.execPath, [cliPath, cwd, "--json", "--fix"], {
+      encoding: "utf8",
+    });
+    assert.equal(secondResult.status, 0, secondResult.stderr);
+    JSON.parse(secondResult.stdout);
+    assert.match(secondResult.stderr, /Nothing to add - no new suggestions\./);
+
+    fs.mkdirSync(path.join(cwd, "node_modules"));
+    fs.writeFileSync(path.join(cwd, "node_modules", "package.json"), "{}");
+    const thirdResult = spawnSync(process.execPath, [cliPath, cwd, "--json", "--fix"], {
+      encoding: "utf8",
+    });
+    assert.equal(thirdResult.status, 0, thirdResult.stderr);
+    JSON.parse(thirdResult.stdout);
+    assert.match(thirdResult.stderr, /Appended \d+ rules to /);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
