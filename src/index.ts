@@ -457,6 +457,10 @@ export function analyze(targetPath: string): AnalysisResult {
 
     const savings = topLevelMatches.reduce((sum, e) => sum + e.size, 0);
 
+    // An empty directory can still match a rule, but excluding it cannot
+    // reduce the reported context size. Do not recommend zero-benefit rules.
+    if (savings <= 0) continue;
+
     // Remember which files this rule covers. Rules can overlap: **/*.pyc lives
     // inside **/__pycache__, so summing per-rule savings would double-count and
     // report a larger reduction than applying every rule actually delivers.
