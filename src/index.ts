@@ -318,8 +318,9 @@ function walkDirectory(
   rules: CompiledRule[],
   entries: FileEntry[],
   visitedInodes: Set<number>
-): void {
+): number {
   const items = fs.readdirSync(dirPath, { withFileTypes: true });
+  let directorySize = 0;
 
   for (const item of items) {
     const fullPath = path.join(dirPath, item.name);
@@ -347,22 +348,16 @@ function walkDirectory(
           continue;
         }
         visitedInodes.add(stat.ino);
-        
+
         const entryIndex = entries.length;
         entries.push({ path: relPath, size: 0, isDirectory: true });
-        walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
+        const childSize = walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
         visitedInodes.delete(stat.ino);
-
-        // Back-fill directory size from its child file entries
-        let dirSize = 0;
-        for (let j = entryIndex + 1; j < entries.length; j++) {
-          if (!entries[j].isDirectory) {
-            dirSize += entries[j].size;
-          }
-        }
-        entries[entryIndex].size = dirSize;
+        entries[entryIndex].size = childSize;
+        directorySize += childSize;
       } else {
         entries.push({ path: relPath, size: stat.size, isDirectory: false });
+        directorySize += stat.size;
       }
     } else if (item.isDirectory()) {
       const stat = fs.statSync(fullPath);
@@ -370,25 +365,20 @@ function walkDirectory(
         continue;
       }
       visitedInodes.add(stat.ino);
-      // Size will be computed from accumulated file entries after walk; store 0 for now
       const entryIndex = entries.length;
       entries.push({ path: relPath, size: 0, isDirectory: true });
-      walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
+      const childSize = walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
       visitedInodes.delete(stat.ino);
-
-      // Back-fill directory size from its child file entries
-      let dirSize = 0;
-      for (let j = entryIndex + 1; j < entries.length; j++) {
-        if (!entries[j].isDirectory) {
-          dirSize += entries[j].size;
-        }
-      }
-      entries[entryIndex].size = dirSize;
+      entries[entryIndex].size = childSize;
+      directorySize += childSize;
     } else if (item.isFile()) {
       const stat = fs.statSync(fullPath);
       entries.push({ path: relPath, size: stat.size, isDirectory: false });
+      directorySize += stat.size;
     }
   }
+
+  return directorySize;
 }
 
 function matchesExcludablePattern(relPath: string, matchers: RegExp[]): boolean {
@@ -433,17 +423,6 @@ export function analyze(targetPath: string): AnalysisResult {
 
   const coveredFiles = new Set<string>();
   for (const def of EXCLUDABLE_PATTERNS) {
-    // Skip patterns already covered by existing dockerignore. Only the exact
-    // pattern counts as coverage: a bare `node_modules` rule excludes the root
-    // directory alone, so nested instances still justify suggesting
-    // `**/node_modules`, and the empty match list below keeps the suggestion
-    // away when nothing is left to exclude.
-    const alreadyCovered = existingRules.some((rule) => {
-      const r = rule.replace(/\\/g, '/').replace(/\/$/, '');
-      return r === def.pattern;
-    });
-    if (alreadyCovered) continue;
-
     // Find matching entries and sum their sizes
     const matchingEntries = entries.filter((e) =>
       matchesExcludablePattern(e.path, def.matchers)

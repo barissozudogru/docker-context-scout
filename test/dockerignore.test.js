@@ -167,6 +167,16 @@ test("the recursive suggestion is not repeated once the recursive rule exists", 
   assert.ok(!result.suggestedRules.some((r) => r.pattern === "**/node_modules"));
 });
 
+test("a later negation reopens an existing ignore suggestion", (t) => {
+  const result = analyzeTree(t, "**/*.md\n!README.md\n", {
+    "README.md": "r".repeat(5),
+  });
+
+  const suggestion = result.suggestedRules.find((r) => r.pattern === "**/*.md");
+  assert.ok(suggestion, "an unignored markdown file should still be suggested");
+  assert.equal(suggestion.estimatedSavingsBytes, 5);
+});
+
 test("a root wildcard keeps deeper files in the context", (t) => {
   const result = analyzeTree(t, "*.md\n", {
     "README.md": "r".repeat(5),
