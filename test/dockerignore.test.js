@@ -131,6 +131,17 @@ test("nested copies behind a bare rule still earn the recursive suggestion", (t)
   assert.equal(suggestion.estimatedSavingsBytes, 200);
 });
 
+test("empty matching directories do not create zero-savings suggestions", (t) => {
+  const result = analyzeTree(t, null, {
+    "packages/api/node_modules/.keep": "",
+  });
+
+  fs.unlinkSync(path.join(result.analyzedPath, "packages/api/node_modules/.keep"));
+
+  const refreshed = analyze(result.analyzedPath);
+  assert.ok(!refreshed.suggestedRules.some((rule) => rule.pattern === "**/node_modules"));
+});
+
 test("a test directory suggestion matches the emitted Docker rule", (t) => {
   const result = analyzeTree(t, null, {
     "test/unit.js": "u".repeat(12),
