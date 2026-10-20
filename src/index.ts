@@ -294,7 +294,7 @@ function dockerignoreGlobToRegex(rule: string): RegExp {
     }
   });
 
-  return new RegExp(`^${reStr}(/.*)?$`);
+  return new RegExp(`^${reStr}(/.*)?$`, 'u');
 }
 
 function matchesDockerignore(

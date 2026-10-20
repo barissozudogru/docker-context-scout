@@ -235,6 +235,17 @@ test("a one-level wildcard does not reach past its own depth", (t) => {
   assert.equal(result.totalSizeBytes, 6 + 2 + "*/temp*\n".length);
 });
 
+test("a question mark matches one Unicode character", (t) => {
+  const result = analyzeTree(t, "?\n", {
+    "😀": "emoji",
+    ascii: "ascii",
+  });
+
+  assert.equal(result.fileCount, 2);
+  assert.ok(!result.topOffenders.some((entry) => entry.path === "😀"));
+  assert.ok(result.topOffenders.some((entry) => entry.path === "ascii"));
+});
+
 test("a trailing '**' behaves like the bare directory", (t) => {
   const result = analyzeTree(t, "logs/**\n", {
     "logs/a.txt": "a".repeat(3),
