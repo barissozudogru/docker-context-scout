@@ -58,6 +58,16 @@ test("a hash in a rule is literal unless it starts the line", (t) => {
   assert.ok(!result.topOffenders.some((entry) => entry.path === "foo#bar"));
 });
 
+test("a hash after leading whitespace is a literal pattern", (t) => {
+  const result = analyzeTree(t, " #keep\n", {
+    "#keep": "ignored",
+    visible: "v",
+  });
+
+  assert.equal(result.fileCount, 2);
+  assert.ok(!result.topOffenders.some((entry) => entry.path === "#keep"));
+});
+
 test("dockerignore patterns clean dot segments before matching", (t) => {
   for (const pattern of ["./dist", "dist/../dist", "./dist/././"]) {
     const result = analyzeTree(t, `${pattern}\n`, {

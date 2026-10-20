@@ -206,8 +206,8 @@ function readDockerignore(dirPath: string): { rules: CompiledRule[]; all: string
   const lines = fs
     .readFileSync(dockerignorePath, 'utf-8')
     .split('\n')
+    .filter((l) => l.trim() && !l.startsWith('#'))
     .map((l) => l.trim())
-    .filter((l) => l && !l.startsWith('#'))
     .map(stripInlineComment)
     .filter((l) => l);
 
