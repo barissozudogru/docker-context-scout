@@ -61,7 +61,7 @@ ${c.bold('Examples:')}
 `);
 }
 
-function printPretty(result: AnalysisResult, thresholdBytes: number): void {
+function printPretty(result: AnalysisResult, thresholdBytes: number, thresholdEnabled: boolean): void {
   const hr = c.dim('-'.repeat(60));
 
   console.log('');
@@ -84,10 +84,9 @@ function printPretty(result: AnalysisResult, thresholdBytes: number): void {
   console.log(c.bold('  Top items by size:'));
   console.log(hr);
 
-  const filtered =
-    thresholdBytes > 0
-      ? result.topOffenders.filter((e) => e.size >= thresholdBytes)
-      : result.topOffenders;
+  const filtered = thresholdEnabled
+    ? result.topOffenders.filter((e) => e.size > thresholdBytes)
+    : result.topOffenders;
 
   if (filtered.length === 0) {
     console.log(c.dim(`  No items above ${formatBytes(thresholdBytes)}.`));
@@ -216,7 +215,7 @@ function main(): void {
   if (jsonMode) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    printPretty(result, thresholdBytes);
+    printPretty(result, thresholdBytes, args.includes('--threshold'));
   }
 
   if (fixMode) {
