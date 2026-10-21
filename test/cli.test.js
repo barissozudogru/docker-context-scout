@@ -66,6 +66,42 @@ test("default report shows all retained top offenders", () => {
   }
 });
 
+test("threshold only shows entries strictly above the configured size", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  try {
+    fs.writeFileSync(path.join(cwd, "exact.bin"), Buffer.alloc(1024 * 1024));
+    fs.writeFileSync(path.join(cwd, "above.bin"), Buffer.alloc(2 * 1024 * 1024));
+
+    const result = spawnSync(process.execPath, [cliPath, cwd, "--threshold", "1"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /exact\.bin/);
+    assert.match(result.stdout, /above\.bin/);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("explicit zero threshold hides zero-byte entries", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  try {
+    fs.writeFileSync(path.join(cwd, "content.bin"), "x");
+    fs.writeFileSync(path.join(cwd, "zero.bin"), "");
+
+    const result = spawnSync(process.execPath, [cliPath, cwd, "--threshold", "0"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, /zero\.bin/);
+    assert.match(result.stdout, /content\.bin/);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("json mode combined with fix outputs parseable JSON on stdout and status on stderr", () => {
   const cliPath = path.resolve("dist/cli.js");
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
