@@ -22,6 +22,23 @@ test("threshold rejects a numeric prefix followed by invalid characters", () => 
   assert.match(result.stderr, /invalid threshold value/);
 });
 
+test("rejects multiple analysis paths instead of silently ignoring the extra paths", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  const first = path.join(cwd, "first");
+  const second = path.join(cwd, "second");
+  fs.mkdirSync(first);
+  fs.mkdirSync(second);
+  try {
+    const result = spawnSync(process.execPath, [cliPath, first, second], { encoding: "utf8" });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /only one analysis path may be provided/);
+    assert.equal(result.stdout, "");
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 for (const value of [" ", "0x10", "Infinity", "1e308"]) {
   test(`threshold rejects non-decimal input ${JSON.stringify(value)}`, () => {
     const cliPath = path.resolve("dist/cli.js");
