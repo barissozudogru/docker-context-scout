@@ -197,6 +197,10 @@ function main(): void {
       !a.startsWith('-') &&
       (i === 0 || args[i - 1] !== '--threshold')
   );
+  if (positional.length > 1) {
+    console.error('Error: only one analysis path may be provided.');
+    process.exit(1);
+  }
   const targetPath = positional[0] ?? process.cwd();
 
   let result: AnalysisResult;
