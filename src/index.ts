@@ -332,9 +332,8 @@ function walkDirectory(
     }
 
     if (item.isSymbolicLink()) {
-      let stat: fs.Stats;
       try {
-        stat = fs.statSync(fullPath);
+        fs.statSync(fullPath);
       } catch (err: unknown) {
         if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
           continue;
@@ -342,23 +341,12 @@ function walkDirectory(
         throw err;
       }
 
-      if (stat.isDirectory()) {
-        // Detect symlink loops via inode tracking
-        if (visitedInodes.has(stat.ino)) {
-          continue;
-        }
-        visitedInodes.add(stat.ino);
-
-        const entryIndex = entries.length;
-        entries.push({ path: relPath, size: 0, isDirectory: true });
-        const childSize = walkDirectory(fullPath, rootPath, rules, entries, visitedInodes);
-        visitedInodes.delete(stat.ino);
-        entries[entryIndex].size = childSize;
-        directorySize += childSize;
-      } else {
-        entries.push({ path: relPath, size: stat.size, isDirectory: false });
-        directorySize += stat.size;
-      }
+      // Docker sends symlinks as links, not as copies of their targets. Count
+      // the link itself so an alias cannot inflate the context or make the
+      // same files appear twice.
+      const link = fs.lstatSync(fullPath);
+      entries.push({ path: relPath, size: link.size, isDirectory: false });
+      directorySize += link.size;
     } else if (item.isDirectory()) {
       const stat = fs.statSync(fullPath);
       if (visitedInodes.has(stat.ino)) {

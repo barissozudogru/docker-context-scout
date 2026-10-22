@@ -315,6 +315,35 @@ test("broken symlinks are skipped without error", (t) => {
   assert.equal(result.totalSizeBytes, 5);
 });
 
+test("directory symlinks are counted as links instead of traversing their targets", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-dir-sym-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  fs.mkdirSync(path.join(root, "real"));
+  fs.writeFileSync(path.join(root, "real", "file.txt"), "payload");
+  fs.symlinkSync("real", path.join(root, "alias"));
+
+  const result = analyze(root);
+
+  assert.equal(result.fileCount, 2);
+  assert.ok(result.topOffenders.some((entry) => entry.path === "real/file.txt"));
+  assert.ok(!result.topOffenders.some((entry) => entry.path === "alias/file.txt"));
+});
+
+test("file symlinks are counted by link metadata instead of target size", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-file-sym-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  fs.writeFileSync(path.join(root, "target.txt"), "payload");
+  fs.symlinkSync("target.txt", path.join(root, "alias.txt"));
+
+  const result = analyze(root);
+  const linkSize = fs.lstatSync(path.join(root, "alias.txt")).size;
+
+  assert.equal(result.totalSizeBytes, linkSize + "payload".length);
+  assert.equal(result.topOffenders.find((entry) => entry.path === "alias.txt").size, linkSize);
+});
+
 test("many matching directories calculate savings without quadratic slowdown", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dcs-scale-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
