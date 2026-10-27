@@ -39,6 +39,22 @@ test("rejects multiple analysis paths instead of silently ignoring the extra pat
   }
 });
 
+test("rejects duplicate threshold options instead of silently ignoring the extra value", () => {
+  const cliPath = path.resolve("dist/cli.js");
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "docker-context-scout-test-"));
+  try {
+    const result = spawnSync(process.execPath, [cliPath, "--threshold", "1", "--threshold", "2"], {
+      cwd,
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--threshold may only be provided once/);
+    assert.equal(result.stdout, "");
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 for (const value of [" ", "0x10", "Infinity", "1e308"]) {
   test(`threshold rejects non-decimal input ${JSON.stringify(value)}`, () => {
     const cliPath = path.resolve("dist/cli.js");
