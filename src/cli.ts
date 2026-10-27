@@ -155,8 +155,16 @@ function applyFix(targetPath: string, result: AnalysisResult): void {
 }
 
 function parseThreshold(args: string[]): number {
-  const idx = args.indexOf('--threshold');
-  if (idx === -1) return 0;
+  const thresholdIndexes = args.reduce<number[]>((indexes, arg, index) => {
+    if (arg === '--threshold') indexes.push(index);
+    return indexes;
+  }, []);
+  if (thresholdIndexes.length === 0) return 0;
+  if (thresholdIndexes.length > 1) {
+    console.error('Error: --threshold may only be provided once.');
+    process.exit(1);
+  }
+  const idx = thresholdIndexes[0];
   const raw = args[idx + 1];
   if (!raw || raw.startsWith('--')) {
     console.error('Error: --threshold requires a numeric value in MB (e.g. --threshold 10)');
