@@ -373,6 +373,10 @@ function matchesExcludablePattern(relPath: string, matchers: RegExp[]): boolean 
   return matchers.some((re) => re.test(relPath));
 }
 
+function isRootAnchoredMatcher(re: RegExp): boolean {
+  return re.source.startsWith('^');
+}
+
 export function analyze(targetPath: string): AnalysisResult {
   const resolvedPath = path.resolve(targetPath);
 
@@ -410,9 +414,12 @@ export function analyze(targetPath: string): AnalysisResult {
   // Union of files covered by any suggested rule, used for the aggregate.
 
   const coveredFiles = new Set<string>();
+  const rootEntries = entries.filter((e) => !e.path.includes('/'));
   for (const def of EXCLUDABLE_PATTERNS) {
     // Find matching entries and sum their sizes
-    const matchingEntries = entries.filter((e) =>
+    const allMatchersAreRootAnchored = def.matchers.every(isRootAnchoredMatcher);
+    const candidates = allMatchersAreRootAnchored ? rootEntries : entries;
+    const matchingEntries = candidates.filter((e) =>
       matchesExcludablePattern(e.path, def.matchers)
     );
 
