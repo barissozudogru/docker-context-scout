@@ -357,7 +357,18 @@ test("many matching directories calculate savings without quadratic slowdown", (
 
   analyze(root);
   const start = performance.now();
-  const result = analyze(root);
+  const originalTest = RegExp.prototype.test;
+  let regexTests = 0;
+  RegExp.prototype.test = function (value) {
+    regexTests++;
+    return originalTest.call(this, value);
+  };
+  let result;
+  try {
+    result = analyze(root);
+  } finally {
+    RegExp.prototype.test = originalTest;
+  }
   const elapsed = performance.now() - start;
 
   assert.equal(result.fileCount, count);
@@ -365,5 +376,16 @@ test("many matching directories calculate savings without quadratic slowdown", (
   assert.ok(suggestion, "matching rule must be suggested");
 
   assert.equal(suggestion.estimatedSavingsBytes, count);
-  assert.ok(elapsed < 300, `analysis took ${elapsed.toFixed(1)}ms, expected under 300ms`);
+  assert.ok(regexTests < 100000, `analysis made ${regexTests} regex checks`);
+  assert.ok(elapsed < 1000, `analysis took ${elapsed.toFixed(1)}ms, expected under 1000ms`);
+});
+
+test("root-only suggestions do not match nested entries", (t) => {
+  const result = analyzeTree(t, null, {
+    "packages/app/dist/output.js": "x".repeat(7),
+    "packages/app/node_modules/dependency.js": "y".repeat(11),
+  });
+
+  assert.ok(!result.suggestedRules.some((rule) => rule.pattern === "dist"));
+  assert.ok(result.suggestedRules.some((rule) => rule.pattern === "**/node_modules"));
 });
